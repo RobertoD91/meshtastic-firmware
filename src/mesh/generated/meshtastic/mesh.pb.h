@@ -321,6 +321,8 @@ typedef enum _meshtastic_HardwareModel {
     meshtastic_HardwareModel_HELTEC_MESH_NODE_T1 = 133,
     /* B&Q Consulting Station G3: TBD */
     meshtastic_HardwareModel_STATION_G3 = 134,
+    /* Radiomaster Nomad, https://www.radiomasterrc.com/products/nomad-elrs-rf-module */
+    meshtastic_HardwareModel_RADIOMASTER_NOMAD = 135,
     /* ------------------------------------------------------------------------------------------------------------------------------------------
  Reserved ID For developing private Ports. These will show up in live traffic sparsely, so we can use a high number. Keep it within 8 bits.
  ------------------------------------------------------------------------------------------------------------------------------------------ */

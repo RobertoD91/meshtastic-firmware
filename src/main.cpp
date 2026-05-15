@@ -156,8 +156,14 @@ extern void tftSetup(void);
 UdpMulticastHandler *udpHandler = nullptr;
 #endif
 
-#if defined(TCXO_OPTIONAL)
+#if defined(TCXO_OPTIONAL) && defined(SX126X_DIO3_TCXO_VOLTAGE)
 float tcxoVoltage = SX126X_DIO3_TCXO_VOLTAGE; // if TCXO is optional, put this here so it can be changed further down.
+#elif defined(LR11X0_DIO3_TCXO_VOLTAGE)
+float tcxoVoltage = LR11X0_DIO3_TCXO_VOLTAGE; // if TCXO is optional, put this here so it can be changed further down.
+#elif defined(LR2021_DIO3_TCXO_VOLTAGE)
+float tcxoVoltage = LR2021_DIO3_TCXO_VOLTAGE; // if TCXO is optional, put this here so it can be changed further down.
+#else
+float tcxoVoltage = 1.6f; // default optional TCXO Vref used by LR11x0/LR20x0 init fallback path.
 #endif
 
 #ifdef MESHTASTIC_INCLUDE_NICHE_GRAPHICS
@@ -986,8 +992,10 @@ void setup()
 #ifdef RF95_FAN_EN
     // Ability to disable FAN if PIN has been set with RF95_FAN_EN.
     // Make sure LoRa has been started before disabling FAN.
+#ifndef RF95_FAN_ALWAYS_ON
     if (config.lora.pa_fan_disabled)
         digitalWrite(RF95_FAN_EN, LOW ^ 0);
+#endif
 #endif
 
 #ifndef ARCH_PORTDUINO

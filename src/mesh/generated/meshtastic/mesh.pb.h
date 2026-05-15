@@ -325,6 +325,10 @@ typedef enum _meshtastic_HardwareModel {
     meshtastic_HardwareModel_T_IMPULSE_PLUS = 135,
     /* Lilygo T-Echo Card */
     meshtastic_HardwareModel_T_ECHO_CARD = 136,
+    /* Radiomaster Nomad, https://www.radiomasterrc.com/products/nomad-elrs-rf-module */
+    meshtastic_HardwareModel_RADIOMASTER_NOMAD = 137,
+    /* BetaFPV SuperP 2.4GHz 14ch receiver, ESP32 Pico D4 + SX1280 + AT2401C PA */
+    meshtastic_HardwareModel_BETAFPV_SUPERP_2400_RX = 138,
     /* ------------------------------------------------------------------------------------------------------------------------------------------
  Reserved ID For developing private Ports. These will show up in live traffic sparsely, so we can use a high number. Keep it within 8 bits.
  ------------------------------------------------------------------------------------------------------------------------------------------ */

@@ -168,6 +168,10 @@
 #define HW_VENDOR meshtastic_HardwareModel_RADIOMASTER_900_BANDIT_NANO
 #elif defined(RADIOMASTER_900_BANDIT)
 #define HW_VENDOR meshtastic_HardwareModel_RADIOMASTER_900_BANDIT
+#elif defined(RADIOMASTER_NOMAD)
+#define HW_VENDOR meshtastic_HardwareModel_RADIOMASTER_NOMAD
+#elif defined(BETAFPV_SUPERP_2400_RX)
+#define HW_VENDOR meshtastic_HardwareModel_BETAFPV_SUPERP_2400_RX
 #elif defined(HELTEC_CAPSULE_SENSOR_V3)
 #define HW_VENDOR meshtastic_HardwareModel_HELTEC_CAPSULE_SENSOR_V3
 #elif defined(HELTEC_VISION_MASTER_T190)

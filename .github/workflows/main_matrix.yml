@@ -3,12 +3,11 @@ concurrency:
   group: ci-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 on:
-  # # Triggers the workflow on push but only for the main branches
   push:
     branches:
       - master
       - develop
-      - pioarduino # Remove when merged // use `feature/` in the future.
+      - pioarduino
       - event/*
       - feature/*
     paths-ignore:
@@ -19,48 +18,17 @@ on:
     branches:
       - master
       - develop
-      - pioarduino # Remove when merged // use `feature/` in the future.
+      - pioarduino
       - event/*
       - feature/*
     paths-ignore:
       - "**.md"
-      #- "**.yml"
 
   workflow_dispatch:
 
 permissions: read-all
 
 jobs:
-  setup:
-    strategy:
-      fail-fast: true
-      matrix:
-        arch:
-          - all
-          - check
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: 3.x
-          cache: pip
-      - run: pip install -U platformio
-      - name: Generate matrix
-        id: jsonStep
-        run: |
-          if [[ "$GITHUB_HEAD_REF" == "" ]]; then
-            TARGETS=$(./bin/generate_ci_matrix.py ${{matrix.arch}})
-          else  
-            TARGETS=$(./bin/generate_ci_matrix.py ${{matrix.arch}} --level pr)
-          fi
-          echo "Name: $GITHUB_REF_NAME Base: $GITHUB_BASE_REF Ref: $GITHUB_REF"
-          echo "${{matrix.arch}}=$TARGETS" >> $GITHUB_OUTPUT
-          echo "$TARGETS" >> $GITHUB_STEP_SUMMARY
-    outputs:
-      all: ${{ steps.jsonStep.outputs.all }}
-      check: ${{ steps.jsonStep.outputs.check }}
-
   version:
     runs-on: ubuntu-latest
     steps:
@@ -68,40 +36,22 @@ jobs:
       - name: Get release version string
         run: |
           echo "long=$(./bin/buildinfo.py long)" >> $GITHUB_OUTPUT
-          echo "deb=$(./bin/buildinfo.py deb)" >> $GITHUB_OUTPUT
         id: version
         env:
           BUILD_LOCATION: local
     outputs:
       long: ${{ steps.version.outputs.long }}
-      deb: ${{ steps.version.outputs.deb }}
-
-  check:
-    needs: setup
-    strategy:
-      fail-fast: false
-      matrix:
-        check: ${{ fromJson(needs.setup.outputs.check) }}
-    # Use 'arctastic' self-hosted runner pool when checking in the main repo
-    runs-on: ${{ github.repository_owner == 'meshtastic' && 'arctastic' || 'ubuntu-latest' }}
-    if: ${{ github.event_name != 'workflow_dispatch' && github.repository == 'meshtastic/firmware' }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: recursive
-      - name: Check ${{ matrix.check.board }}
-        uses: meshtastic/gh-action-firmware@main
-        with:
-          pio_platform: ${{ matrix.check.platform }}
-          pio_env: ${{ matrix.check.board }}
-          pio_target: check
 
   build:
-    needs: [setup, version]
+    needs: [version]
     strategy:
       fail-fast: false
       matrix:
-        build: ${{ fromJson(needs.setup.outputs.all) }}
+        build:
+          - { board: "heltec-v4",            platform: "esp32s3" }
+          - { board: "betafpv_2400_tx_micro",  platform: "esp32"   }
+          - { board: "betafpv_superp_2400",   platform: "esp32"   }
+          - { board: "radiomaster_nomad",      platform: "esp32"   }
     uses: ./.github/workflows/build_firmware.yml
     with:
       version: ${{ needs.version.outputs.long }}

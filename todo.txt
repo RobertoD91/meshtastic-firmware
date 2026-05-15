@@ -1,0 +1,2 @@
+funziona su nomad a 800
+errore su 2.4, forse non testato

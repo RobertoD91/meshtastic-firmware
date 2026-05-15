@@ -17,3 +17,40 @@ else:
 print(f"PROGNAME: {env.get('PROGNAME')}")
 if platform.name == "espressif32":
     print(f"ESP32_FS_IMAGE_NAME: {env.get('ESP32_FS_IMAGE_NAME')}")
+
+
+# RadioLib LR1121 firmware-id compatibility patch.
+# An LR1121 running its transceiver firmware reports GetVersion device id 0xF3
+# (see ExpressLRS LR1121Driver: LR1121_FIRMWARE_TYPE). Upstream RadioLib's
+# LR11x0::findChip only accepts the silicon/bootloader id 0x03, so it fails to
+# detect an otherwise healthy chip (e.g. on the RadioMaster Nomad). Teach
+# findChip to also accept 0xF3 for the LR1121. The edit is additive (0x03 still
+# works), idempotent, and harmless to every other board.
+def patch_radiolib_lr1121(*_args, **_kwargs):
+    import os
+
+    libdeps = env.get("PROJECT_LIBDEPS_DIR")
+    pioenv = env.get("PIOENV")
+    if not libdeps or not pioenv:
+        return
+    src = os.path.join(libdeps, pioenv, "RadioLib", "src", "modules", "LR11x0", "LR11x0.cpp")
+    if not os.path.isfile(src):
+        return
+    with open(src, "r", encoding="utf-8", errors="ignore") as fh:
+        text = fh.read()
+    marker = "/* meshtastic: also accept LR1121 fw id 0xF3 */"
+    needle = "(info.device == RADIOLIB_LR11X0_DEVICE_BOOT)"
+    if marker in text or needle not in text:
+        return
+    text = text.replace(
+        needle,
+        needle + " || ((ver == RADIOLIB_LR11X0_DEVICE_LR1121) && (info.device == 0xF3)) " + marker,
+        1,
+    )
+    with open(src, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    print("Patched RadioLib LR11x0::findChip to accept LR1121 firmware id 0xF3")
+
+
+patch_radiolib_lr1121()
+env.AddPreAction("$BUILD_DIR/RadioLib/src/modules/LR11x0/LR11x0.cpp.o", patch_radiolib_lr1121)

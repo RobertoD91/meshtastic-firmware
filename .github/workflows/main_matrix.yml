@@ -45,17 +45,15 @@ jobs:
         with:
           python-version: 3.x
           cache: pip
-      - run: pip install -U platformio
       - name: Generate matrix
         id: jsonStep
         run: |
-          if [[ "$GITHUB_HEAD_REF" == "" ]]; then
-            TARGETS=$(./bin/generate_ci_matrix.py ${{matrix.arch}})
-          else  
-            TARGETS=$(./bin/generate_ci_matrix.py ${{matrix.arch}} --level pr)
+          if [[ "${{ matrix.arch }}" == "all" ]]; then
+            TARGETS='[{"board":"heltec-v4","platform":"esp32s3"},{"board":"betafpv_2400_tx_micro","platform":"esp32"},{"board":"radiomaster_nomad","platform":"esp32"}]'
+          else
+            TARGETS='[]'
           fi
-          echo "Name: $GITHUB_REF_NAME Base: $GITHUB_BASE_REF Ref: $GITHUB_REF"
-          echo "${{matrix.arch}}=$TARGETS" >> $GITHUB_OUTPUT
+          echo "${{ matrix.arch }}=$TARGETS" >> $GITHUB_OUTPUT
           echo "$TARGETS" >> $GITHUB_STEP_SUMMARY
     outputs:
       all: ${{ steps.jsonStep.outputs.all }}

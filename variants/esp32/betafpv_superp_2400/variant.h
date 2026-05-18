@@ -31,10 +31,7 @@
 #define SX128X_CS LORA_CS
 #define SX128X_DIO1 38
 #define SX128X_BUSY 37
-// We own the SX1280 reset in earlyInitVariant() (ELRS-style: long pulse +
-// active BUSY-low wait). Hand RadioLib RADIOLIB_NC so its short reset pulse
-// can't re-wedge the chip right before it reads the version register.
-#define SX128X_RESET RADIOLIB_NC
+#define SX128X_RESET LORA_RESET
 
 // Second (unused) SX1280 + AT2401C — parked off at boot, never selected
 #define SX128X_CS_2 27

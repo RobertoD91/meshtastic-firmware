@@ -164,6 +164,27 @@ through `SX128x init result` and include the `RLB_*` and `[SuperP]` lines.
    temporary diagnostics, keep the solid fixes above, and treat the SX1280
    detection as a known limitation (BLE/WiFi/LED usable).
 
-**This branch implements option 2**: diagnostics removed, solid fixes kept,
-SX1280-under-Meshtastic documented as a known limitation. Re-enable the SPI
-debug flags (above) to resume option 1.
+### Option 1 attempt — RadioLib BUSY patch (active on this branch)
+
+Reading RadioLib `src/Module.cpp::SPItransferStream()` showed the BUSY
+handling is structurally correct (it waits for BUSY low before and after each
+transfer) **except** that after the transfer it does
+`delayMicroseconds(1)` and then immediately samples BUSY. On this board the
+SX1280 asserts BUSY *later than 1 us* after a command, so RadioLib sees BUSY
+still low, treats the command as finished, and clocks the next command into a
+chip that is just going busy → exactly the observed corruption / drop-off.
+
+`radiolib_busy_patch.py` (wired as a `pre:` `extra_scripts` only for this env)
+bumps that single pre-sample delay from `delayMicroseconds(1)` to
+`delayMicroseconds(50)` in the downloaded RadioLib `Module.cpp`. The patch is
+idempotent and marked with `RADIOLIB_SUPERP_BUSY_PATCH`.
+
+> On a clean `.pio` the libraries may be downloaded *after* the script first
+> runs; if the build log prints `RadioLib Module.cpp not found yet; skipping`,
+> just run the build once more (libdeps now present → patch applies → RadioLib
+> recompiles). Incremental builds patch on the first run.
+
+The SPI-debug flags are temporarily re-enabled to confirm the effect; if the
+version read is clean and `SX128x init result 0` / `SX1280 init success`
+appears, the patch is the fix — then remove the debug flags and (optionally)
+upstream the RadioLib finding.

@@ -48,5 +48,11 @@
 #define NEOPIXEL_COUNT 1
 #define NEOPIXEL_DATA 21
 #define NEOPIXEL_TYPE (NEO_GRB + NEO_KHZ800)
+// Light the LED on every boot as a fixed green power/alive indicator
+#define ENABLE_AMBIENTLIGHTING
+#define AMBIENTLIGHTING_CURRENT 20
+#define AMBIENTLIGHTING_RED 0
+#define AMBIENTLIGHTING_GREEN 150
+#define AMBIENTLIGHTING_BLUE 40
 
 #undef EXT_NOTIFY_OUT

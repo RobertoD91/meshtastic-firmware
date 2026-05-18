@@ -52,6 +52,13 @@ class AmbientLightingThread : public concurrency::OSThread
 #ifdef HAS_RGB_LED
 #ifdef ENABLE_AMBIENTLIGHTING
         moduleConfig.ambient_lighting.led_state = true;
+#if defined(AMBIENTLIGHTING_RED) && defined(AMBIENTLIGHTING_GREEN) && defined(AMBIENTLIGHTING_BLUE)
+        // Variant-pinned fixed color/brightness (applied every boot)
+        moduleConfig.ambient_lighting.current = AMBIENTLIGHTING_CURRENT;
+        moduleConfig.ambient_lighting.red = AMBIENTLIGHTING_RED;
+        moduleConfig.ambient_lighting.green = AMBIENTLIGHTING_GREEN;
+        moduleConfig.ambient_lighting.blue = AMBIENTLIGHTING_BLUE;
+#endif
 #endif
 #endif
 #if AMBIENT_LIGHTING_TEST

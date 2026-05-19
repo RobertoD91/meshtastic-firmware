@@ -1,18 +1,12 @@
 # BetaFPV SuperP 2.4GHz RX — Meshtastic port status & investigation log
 
 > Target env: `betafpv_superp_2400` — HardwareModel `BETAFPV_SUPERP_2400_RX` (136)
-
-## TL;DR
-
-The board boots, the ESP32 works, BLE/WiFi/phone app work, the RGB LED works —
-**but the LoRa radio is not usable under Meshtastic yet.** RadioLib fails to
-detect the SX1280 (`SX128x init result -2`, `No SX1280 radio`). The exact same
-hardware works perfectly when flashed with ExpressLRS, so this is **not** a
-hardware, wiring, power, or pin-mapping problem — it is a RadioLib ↔ board
-SPI/BUSY timing integration issue. See the investigation below.
-
-This document records everything found and tried so the next person does not
-repeat the dead ends.
+>
+> **Status: the SX1280 LoRa radio is NOT usable under Meshtastic on this
+> board.** The ESP32, BLE, WiFi and the RGB LED all work. Pins/power/wiring
+> have been ruled out (ExpressLRS runs the radio perfectly on the same unit).
+> The blocker is the generic RadioLib SX128x driver vs this board's SPI/timing
+> characteristics — see the full investigation below.
 
 ## Hardware
 
@@ -46,102 +40,129 @@ The pinout is **correct** and not the cause of the failure.
 | ESP32 / FS / NVS     | OK                                                           |
 | BLE / WiFi / phone   | OK                                                           |
 | WS2812 status LED    | OK — fixed green (see "Status LED" below)                     |
-| **LoRa SX1280**      | **NOT WORKING** — `SX128x init result -2`, `No SX1280 radio` |
+| **LoRa SX1280**      | **NOT WORKING under Meshtastic/RadioLib**                    |
 
-Because the radio is never detected, Meshtastic records
-`CriticalErrorCode_NO_RADIO` (3) and the device cannot mesh. With region UNSET
-it briefly reaches the 906 MHz path and returns `-12` (INVALID_FREQUENCY, the
-SX1280 is 2.4 GHz only); Meshtastic then auto-sets region `LORA_24` and reboots,
-and from then on it never gets past `-2`. This is why the device "always asks
-for the region".
+Meshtastic records `CriticalErrorCode_NO_RADIO` (3) and the device cannot mesh.
 
-## Symptom analysis (RadioLib SPI debug)
+## What works in this variant
 
-With `RADIOLIB_DEBUG_SPI` enabled we can see the exact bus traffic:
+These changes are solid and stand on their own; they are unrelated to the radio
+problem and are intentionally narrow:
 
-- The SX1280 **answers short commands**: after `CMDW 80` (SetStandby) it
-  returns status byte `0x43`. So SPI, MISO, NSS and the chip fundamentally work.
-- The **multi-byte version-register read** (`CMDR 1901F0`,
-  `RADIOLIB_SX128X_REG_VERSION_STRING`) comes back **byte-shifted by a varying
-  amount, padded with leading `0xFF`**. The correct bytes are present but slip
-  to a different offset on every attempt, e.g.:
-  - cold first boot: `... 53 58 31 32 38 30 20 56 33 42 20 41 39 42 37 00` → `SX1280 V3B A9B7` (correct)
-  - later boots: `... FF FF FF FF 33 42 20 41 39 42 37 00` → tail `3B A9B7` shifted; another try `... 39 42 37 00`; etc.
-
-Interpretation: the chip is **still BUSY** when RadioLib clocks the register
-read, so it emits a variable number of leading dummy/FF bytes before the real
-data, and RadioLib's fixed-length read window then captures a shifted/truncated
-string → "SX128x not found" → `-2`. ExpressLRS works because its bespoke SX1280
-driver waits on BUSY meticulously; RadioLib's generic driver does not, on this
-board.
-
-### Refinement after instrumenting the BUSY pin
-
-A later diagnostic build tightly sampled `GPIO37` right after the reset and
-logged: `BUSY(GPIO37) everHigh=1 highForUs=1395`. So **the BUSY pin works
-correctly** — it goes HIGH for ~1.4 ms after reset, exactly as a healthy
-SX1280 should. On that cold boot the version string was also read **perfectly**
-(`SX1280 V3B A9B7`, "Found SX128x"); then RadioLib issued config commands and
-the chip went unresponsive after a few (`CMDW 88 → SO FF FF`), ending in `-2`.
-
-So, more precisely: the BUSY pin and reset are fine and detection succeeds on a
-cold boot, but **the chip drops off the bus part-way through RadioLib's SX128x
-configuration sequence**, intermittently. The earlier "garbled version string"
-is the same root cause seen on warm/repeat boots. It is RadioLib's command/BUSY
-sequencing on this specific board — not the pin, not detection per se.
-
-## What has been ruled out
-
-| Hypothesis                         | How it was ruled out |
-|------------------------------------|----------------------|
-| Wrong pins                         | 100% match to official ELRS layout; ELRS works on this unit |
-| Power / brownout                   | Reproduced on a 2S LiPo with **no** brownout; still `-2` |
-| Second SX1280 contending the bus   | `earlyInitVariant` deselects radio 2 (`NSS2/GPIO27=1`, verified); failures are `0xFF` (idle), not `0x00` (contention) |
-| SPI clock too fast                 | Lowered to 1 MHz via `LORA_SPI_FREQUENCY` — identical garbage |
-| RadioLib reset too short / warm-reboot | Long ELRS-style reset + active BUSY wait added — still `-2` |
-| Letting us own the reset (RADIOLIB_NC) | **Made it worse** — chip then returns all `0xFF` (RadioLib's reset is required); reverted |
-| BUSY pin (GPIO37) not wired/readable    | **Disproved** — measured HIGH for ~1395 µs after reset; the pin works |
-
-## Diagnosis (current best understanding)
-
-This is a **RadioLib SX128x ↔ this specific diversity board** integration
-problem at the SPI/BUSY-timing level. RadioLib begins the version-register read
-before the SX1280 has cleared BUSY. The open question being measured now: does
-`GPIO37` (the BUSY pin) actually reflect the chip's BUSY state in Meshtastic's
-runtime, or is RadioLib effectively never waiting on it?
-
-## Changes made on this branch
-
-### Solid, keepable fixes
-- **`platformio.ini` (root)**: `default_envs` switched to the newline-list form
-  (space-separated is parsed by PlatformIO as one env name and fails).
-- **Status LED**: `ENABLE_AMBIENTLIGHTING` for this target + a new generic,
+- **Root `platformio.ini`**: `default_envs` switched to the newline-list form
+  (space-separated is parsed by PlatformIO as a single env name and fails).
+- **Status LED**: `ENABLE_AMBIENTLIGHTING` for this target plus a generic,
   macro-guarded fixed-colour override in `src/AmbientLightingThread.h`
-  (`AMBIENTLIGHTING_RED/GREEN/BLUE/CURRENT`). No effect on other boards that
-  use `ENABLE_AMBIENTLIGHTING` (they don't define the macros). The SuperP shows
-  a steady green "alive" LED.
-- **Second radio parking**: `earlyInitVariant()` drives radio 2 `NSS` (GPIO27)
-  high and its PA control (GPIO12) low so the unused SX1280 cannot disturb the
-  shared SPI bus. This is correct hygiene for a true-diversity board regardless.
+  (`AMBIENTLIGHTING_RED/GREEN/BLUE/CURRENT`) — **no effect on other boards**
+  that use `ENABLE_AMBIENTLIGHTING` (they don't define the macros). The SuperP
+  shows a steady green "alive" LED.
+- **Second radio parking**: `earlyInitVariant()` drives radio 2 NSS (GPIO27)
+  high and its PA control (GPIO12) low and gives the primary chip a clean,
+  well-delayed reset. Correct hygiene for a true-diversity board regardless of
+  whether the radio works.
 - **`LORA_SPI_FREQUENCY`** macro added to `src/mesh/RadioInterface.cpp`
   (default 4 MHz, unchanged for every other board) so the LoRa SPI clock is
-  per-target tunable.
+  per-target tunable without touching common code.
 
-### Diagnostics (removed from this branch — how to re-enable)
-The temporary instrumentation has been stripped so the branch is clean. To
-continue the radio investigation, re-add to the target `platformio.ini`
-`build_flags`:
+## The radio investigation — what we found, in order
 
-```
--DRADIOLIB_DEBUG_BASIC=1
--DRADIOLIB_DEBUG_SPI=1
--DRADIOLIB_DEBUG_PORT=Serial
-```
+The failure mode is best read as a sequence: every fix uncovered the next
+layer, and at the end the picture became clear.
 
-That dumps every SX1280 SPI transaction (`RLB_SPI`/`RLB_DBG`) at boot, which is
-how all of the above was diagnosed. A BUSY-pin probe can be re-added in
-`earlyInitVariant()`/`lateInitVariant()` if needed (see git history of this
-branch for the exact snippet).
+### 1. First diagnostic: chip is reachable, the version-read corrupts
+
+With `RADIOLIB_DEBUG_SPI` enabled the chip clearly responds to short commands
+(status byte `0x43`/`0x45`/`0x55`/`0x65` — all "STDBY + cmd OK") but the
+16-byte `RADIOLIB_SX128X_REG_VERSION_STRING` read is byte-shifted by a
+varying amount and trails into `0xFF`:
+
+- Cold first boot once read the full string `SX1280 V3B A9B7`.
+- Subsequent boots read `SX1280 V3` then degrade to `0xFF` at a random offset,
+  e.g. `SX1280)......`, `... 33 42 20 41 39 42 37 03` (tail "3B A9B7" shifted).
+
+→ The chip drops MISO mid-burst. The 16-byte version read sometimes completes,
+sometimes truncates. This is **not** between-command BUSY (it's a single SPI
+transaction).
+
+### 2. Things that did NOT fix it
+
+| Hypothesis                          | What happened |
+|-------------------------------------|---------------|
+| Wrong pins                          | 100% match to official ELRS layout; ELRS works |
+| Power / brownout                    | Reproduced on a 2S LiPo with no brownout; still `-2` |
+| Second SX1280 contending the bus    | NSS2/GPIO27 confirmed HIGH; failures are `0xFF` (idle), not `0x00` (contention) |
+| SPI clock too fast                  | Lowered to 1 MHz via `LORA_SPI_FREQUENCY` — identical garbage |
+| Letting variant own the reset (`SX128X_RESET = RADIOLIB_NC`) | Made it strictly worse: chip then returned all `0xFF` (RadioLib's reset is required) |
+| BUSY pin (GPIO37) not wired/readable | Disproved: post-reset probe measured `everHigh=1`, `highForUs=1395` — the pin works |
+
+### 3. Patch attempts that produced progress
+
+Sequence of incremental RadioLib patches applied via a `pre:` `extra_scripts`
+hook (see git history of this branch for the script):
+
+1. **Lengthen `SX128x::reset()`**: `delay(1)` → `delay(20)` low + 20 ms
+   post-release settle. Result: the chip now finishes its internal boot before
+   RadioLib starts SPI, so on a clean run the **version-string read is
+   correct** (`SX1280 V3B A9B7`). Detection succeeds. The mid-burst truncation
+   on warm reads is partially mitigated.
+2. **Bump `Module::SPItransferStream` post-transfer pre-poll**:
+   `delayMicroseconds(1)` → `delay(2)`/`delay(10)`. No effect on the next
+   failure mode (see below); the chip dies right at `SetPacketType` (0x8A)
+   regardless of how long we wait.
+3. **Relax `SX128x::SPIparseStatus` 0x00/0xFF rejection**: this chip returns
+   `SO FF FF` as the status during the `SetPacketType` write even when alive;
+   removing the rejection lets RadioLib proceed. After this, the cold/UNSET
+   path got far enough to return `-12` (`INVALID_FREQUENCY`, expected at 906
+   MHz), Meshtastic auto-set `LORA_24` and rebooted. On the warm reboot init
+   then failed with `-20` = `RADIOLIB_ERR_WRONG_MODEM`: a *read* of
+   `GET_PACKET_TYPE` (CMDR 0x03) returned `0xFF` and RadioLib concluded "not
+   LoRa".
+4. **Short-circuit `SX128x::getPacketType()`** to always return
+   `PACKET_TYPE_LORA` (we know we set LoRa in `config()`). Now `lora.begin()`
+   itself returned `RADIOLIB_ERR_NONE` and Meshtastic logged
+   `Frequency set to 2420.718750`, `Bandwidth set to 812.500000`,
+   `Power output set to 3`. But the very next call (`setCRC(2)` /
+   `startReceive()`, which issues `SetPacketParams` 0x8C) hit an invalid
+   status `0x4F` (`STATUS_CMD_TIMEOUT`) → init returned non-zero → still
+   `No SX1280 radio`.
+
+### 4. Conclusion
+
+The pattern across every patch is consistent:
+
+- **SPI writes** are accepted by the chip (it responds with a sensible status
+  byte for most commands).
+- **SPI reads** (and the status byte on some writes) return **`0xFF`
+  intermittently** — the chip stops driving MISO during reads at unpredictable
+  byte offsets.
+
+ExpressLRS works on the same hardware because its hand-written SX1280 driver
+either does not perform these reads or tolerates the garbage. Every defensive
+check in RadioLib that we peel away exposes the next read-based check.
+Continuing down this path produces a firmware that lies to itself about chip
+state; even if `begin()` were forced to return success, the runtime operation
+of LoRa (reading `IrqStatus`, `RxBufferStatus`, `PacketStatus`, payload) would
+remain unreliable because those code paths also depend on SPI reads.
+
+This is a **RadioLib SX128x ↔ this specific diversity board** integration
+problem at the SPI read level. It cannot be fixed at the variant configuration
+layer.
+
+## Options to pursue this further (if anyone is so inclined)
+
+1. **Upstream / fork RadioLib's SX128x driver** to (a) be robust against
+   spurious `0xFF` on writes, (b) verify reads via the BUSY edge / repeat-on-
+   garbage, and (c) optionally provide an "ELRS-style trust-and-go" mode for
+   diversity boards. This needs hardware-in-the-loop iteration — it is not
+   something a remote patch session can converge on.
+2. **Investigate the SuperP electrical layout**: probe the shared MISO trace
+   with a scope while issuing back-to-back read commands, and confirm whether
+   the second SX1280 (or the AT2401C front-ends, or the diversity routing) is
+   the source of the marginal read timing. ELRS's working driver hints that
+   the right SPI/BUSY sequence side-steps it.
+3. **Accept as a known limitation** (current state of this branch): ship the
+   target with BLE/WiFi/LED working and the radio documented as not yet
+   functional under Meshtastic.
 
 ## How to reproduce / collect logs
 
@@ -151,40 +172,18 @@ pio run -e betafpv_superp_2400 -t upload && pio run -e betafpv_superp_2400 -t mo
 ```
 
 Serial is UART0 (GPIO1 TX / GPIO3 RX) at 115200 — solder a 3.3 V USB-UART to
-the pads (the RX has no USB). Capture from the `SX128xInterface(cs=26 ...)` line
-through `SX128x init result` and include the `RLB_*` and `[SuperP]` lines.
+the pads (the RX has no USB).
 
-## Remaining options
+To re-enable the diagnostics that produced this investigation, add to this
+target's `platformio.ini` `build_flags`:
 
-1. **Patch RadioLib's SX128x driver** to wait on BUSY around the register read
-   (mimic ExpressLRS). RadioLib is a zip `lib_deps` dependency, so this needs a
-   post-install patch script or a RadioLib fork, plus hardware-in-the-loop
-   iteration.
-2. **Ship the target without a working Meshtastic radio for now**: strip the
-   temporary diagnostics, keep the solid fixes above, and treat the SX1280
-   detection as a known limitation (BLE/WiFi/LED usable).
+```
+-DRADIOLIB_DEBUG_BASIC=1
+-DRADIOLIB_DEBUG_SPI=1
+-DRADIOLIB_DEBUG_PORT=Serial
+```
 
-### Option 1 attempt — RadioLib BUSY patch (active on this branch)
-
-Reading RadioLib `src/Module.cpp::SPItransferStream()` showed the BUSY
-handling is structurally correct (it waits for BUSY low before and after each
-transfer) **except** that after the transfer it does
-`delayMicroseconds(1)` and then immediately samples BUSY. On this board the
-SX1280 asserts BUSY *later than 1 us* after a command, so RadioLib sees BUSY
-still low, treats the command as finished, and clocks the next command into a
-chip that is just going busy → exactly the observed corruption / drop-off.
-
-`radiolib_busy_patch.py` (wired as a `pre:` `extra_scripts` only for this env)
-bumps that single pre-sample delay from `delayMicroseconds(1)` to
-`delayMicroseconds(50)` in the downloaded RadioLib `Module.cpp`. The patch is
-idempotent and marked with `RADIOLIB_SUPERP_BUSY_PATCH`.
-
-> On a clean `.pio` the libraries may be downloaded *after* the script first
-> runs; if the build log prints `RadioLib Module.cpp not found yet; skipping`,
-> just run the build once more (libdeps now present → patch applies → RadioLib
-> recompiles). Incremental builds patch on the first run.
-
-The SPI-debug flags are temporarily re-enabled to confirm the effect; if the
-version read is clean and `SX128x init result 0` / `SX1280 init success`
-appears, the patch is the fix — then remove the debug flags and (optionally)
-upstream the RadioLib finding.
+The full set of incremental RadioLib patches that produced each step of
+progress lives in this branch's git history under
+`variants/esp32/betafpv_superp_2400/radiolib_busy_patch.py` (now removed from
+the working tree).

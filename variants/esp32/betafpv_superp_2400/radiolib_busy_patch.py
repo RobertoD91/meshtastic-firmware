@@ -2,40 +2,78 @@ Import("env")
 import glob
 import os
 
-# RadioLib's Module::SPItransferStream() waits for the BUSY GPIO after each SPI
-# transfer, but only delays 1 us before sampling it. On the BetaFPV SuperP the
-# SX1280 ("V3B A9B7") asserts BUSY later than 1 us, so RadioLib sees BUSY still
-# low, assumes the command finished, and fires the next command into a chip
-# that is about to go busy -> corrupted reads / chip drops off -> init -2.
-# ExpressLRS works because it waits on BUSY generously. This pre-build hook
-# bumps that single pre-sample delay so BUSY has time to rise. Idempotent; only
-# wired into the betafpv_superp_2400 env.
+# Two RadioLib timing weaknesses on the BetaFPV SuperP SX1280:
+#
+# 1) SX128x::reset() pulses NRESET low for only delay(1) and then immediately
+#    starts SPI (standby/version read) WITHOUT waiting for the chip to finish
+#    its internal boot. ExpressLRS resets generously and waits. The version
+#    read then catches the chip mid-boot -> reads truncate to 0xFF at a varying
+#    byte -> intermittent "found but garbage" -> init -2.
+#
+# 2) Module::SPItransferStream() only delays 1 us after a transfer before
+#    sampling BUSY, which is shorter than this SX1280's BUSY-assert latency.
+#
+# This pre-build hook patches both in the downloaded RadioLib. Idempotent
+# (marker RADIOLIB_SUPERP_BUSY_PATCH). Only wired into the betafpv_superp_2400
+# env. NOTE: on a pristine .pio the libs may not be downloaded the first time
+# this runs; the build log will say "not found yet" -> just build again.
 
 MARKER = "RADIOLIB_SUPERP_BUSY_PATCH"
-OLD = "      this->hal->delayMicroseconds(1);"
-NEW = ("      this->hal->delayMicroseconds(50); // " + MARKER +
-       ": let SX1280 assert BUSY before sampling")
 
-libdeps = env.subst("$PROJECT_LIBDEPS_DIR")
-pioenv = env["PIOENV"]
-matches = glob.glob(os.path.join(libdeps, pioenv, "**", "RadioLib", "src", "Module.cpp"),
-                    recursive=True)
-if not matches:
-    matches = glob.glob(os.path.join(libdeps, "**", "RadioLib", "src", "Module.cpp"),
-                        recursive=True)
+PATCHES = {
+    os.path.join("src", "Module.cpp"): [
+        ("      this->hal->delayMicroseconds(1);",
+         "      this->hal->delayMicroseconds(50); // " + MARKER),
+    ],
+    os.path.join("src", "modules", "SX128x", "SX128x.cpp"): [
+        # longer NRESET low + a post-release settle so the chip finishes its
+        # internal boot before RadioLib reads the version register
+        ("  this->mod->hal->digitalWrite(this->mod->getRst(), this->mod->hal->GpioLevelLow);\n"
+         "  this->mod->hal->delay(1);\n"
+         "  this->mod->hal->digitalWrite(this->mod->getRst(), this->mod->hal->GpioLevelHigh);",
+         "  this->mod->hal->digitalWrite(this->mod->getRst(), this->mod->hal->GpioLevelLow);\n"
+         "  this->mod->hal->delay(20); // " + MARKER + "\n"
+         "  this->mod->hal->digitalWrite(this->mod->getRst(), this->mod->hal->GpioLevelHigh);\n"
+         "  this->mod->hal->delay(20); // " + MARKER + " post-reset settle"),
+    ],
+}
 
-if not matches:
-    print("[superp busy patch] RadioLib Module.cpp not found yet; skipping")
+
+def find_radiolib_root():
+    libdeps = env.subst("$PROJECT_LIBDEPS_DIR")
+    pioenv = env["PIOENV"]
+    for base in (os.path.join(libdeps, pioenv), libdeps):
+        hits = glob.glob(os.path.join(base, "**", "RadioLib", "src", "Module.cpp"),
+                         recursive=True)
+        if hits:
+            return os.path.dirname(os.path.dirname(hits[0]))  # .../RadioLib
+    return None
+
+
+root = find_radiolib_root()
+if not root:
+    print("[superp busy patch] RadioLib not downloaded yet; SKIPPING - "
+          "run the build once more so the patch can apply")
 else:
-    path = matches[0]
-    with open(path, "r") as f:
-        src = f.read()
-    if MARKER in src:
-        print("[superp busy patch] already applied: %s" % path)
-    elif OLD in src:
-        with open(path, "w") as f:
-            f.write(src.replace(OLD, NEW, 1))
-        print("[superp busy patch] applied to %s" % path)
-    else:
-        print("[superp busy patch] WARNING: expected line not found in %s "
-              "(RadioLib changed?) - not patched" % path)
+    for rel, repls in PATCHES.items():
+        path = os.path.join(root, rel)
+        if not os.path.isfile(path):
+            print("[superp busy patch] WARNING: %s missing" % path)
+            continue
+        with open(path, "r") as f:
+            src = f.read()
+        if MARKER in src:
+            print("[superp busy patch] already applied: %s" % path)
+            continue
+        changed = False
+        for old, new in repls:
+            if old in src:
+                src = src.replace(old, new, 1)
+                changed = True
+            else:
+                print("[superp busy patch] WARNING: pattern not found in %s "
+                      "(RadioLib changed?)" % path)
+        if changed:
+            with open(path, "w") as f:
+                f.write(src)
+            print("[superp busy patch] APPLIED: %s" % path)

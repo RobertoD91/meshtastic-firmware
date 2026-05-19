@@ -23,7 +23,7 @@ MARKER = "RADIOLIB_SUPERP_BUSY_PATCH"
 PATCHES = {
     os.path.join("src", "Module.cpp"): [
         ("      this->hal->delayMicroseconds(1);",
-         "      this->hal->delayMicroseconds(50); // " + MARKER),
+         "      this->hal->delay(2); // " + MARKER + " (bring-up value; tune down once stable)"),
     ],
     os.path.join("src", "modules", "SX128x", "SX128x.cpp"): [
         # longer NRESET low + a post-release settle so the chip finishes its

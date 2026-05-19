@@ -35,6 +35,16 @@ PATCHES = {
          "  this->mod->hal->delay(20); // " + MARKER + "\n"
          "  this->mod->hal->digitalWrite(this->mod->getRst(), this->mod->hal->GpioLevelHigh);\n"
          "  this->mod->hal->delay(20); // " + MARKER + " post-reset settle"),
+        # SPIparseStatus rejects 0x00/0xFF status as CHIP_NOT_FOUND. On this
+        # board the chip occasionally returns 0xFF as the status byte during a
+        # write (SetPacketType) while still being alive, and RadioLib bails out
+        # of begin() with -2. ExpressLRS does not check write status at all.
+        # Drop the 0x00/0xFF rejection here; findChip()'s strncmp("SX1280",...)
+        # already handles real chip absence.
+        ("  } else if((in == 0x00) || (in == 0xFF)) {\n"
+         "    return(RADIOLIB_ERR_CHIP_NOT_FOUND);\n"
+         "  }",
+         "  } // " + MARKER + ": drop 0x00/0xFF chip-absence reject; findChip handles it"),
     ],
 }
 

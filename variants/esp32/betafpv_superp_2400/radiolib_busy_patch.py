@@ -45,6 +45,21 @@ PATCHES = {
          "    return(RADIOLIB_ERR_CHIP_NOT_FOUND);\n"
          "  }",
          "  } // " + MARKER + ": drop 0x00/0xFF chip-absence reject; findChip handles it"),
+        # SPI *reads* on this board also return 0xFF intermittently (e.g.,
+        # GetPacketType after SetRfFrequency), making RadioLib bail with
+        # WRONG_MODEM (-20) even though config() just set LoRa. We always run
+        # this target in LoRa mode (Meshtastic), so short-circuit getPacketType
+        # to return the modem we explicitly configured.
+        ("uint8_t SX128x::getPacketType() {\n"
+         "  uint8_t data = 0xFF;\n"
+         "  this->mod->SPIreadStream(RADIOLIB_SX128X_CMD_GET_PACKET_TYPE, &data, 1);\n"
+         "  return(data);\n"
+         "}",
+         "uint8_t SX128x::getPacketType() {\n"
+         "  // " + MARKER + ": SPI reads return 0xFF intermittently on this board;\n"
+         "  // trust the modem we set in config() (Meshtastic always uses LoRa).\n"
+         "  return(RADIOLIB_SX128X_PACKET_TYPE_LORA);\n"
+         "}"),
     ],
 }
 

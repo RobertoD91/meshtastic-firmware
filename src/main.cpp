@@ -147,8 +147,7 @@ extern void tftSetup(void);
 UdpMulticastHandler *udpHandler = nullptr;
 #endif
 
-#if defined(TCXO_OPTIONAL)
-#ifdef SX126X_DIO3_TCXO_VOLTAGE
+#if defined(TCXO_OPTIONAL) && defined(SX126X_DIO3_TCXO_VOLTAGE)
 float tcxoVoltage = SX126X_DIO3_TCXO_VOLTAGE; // if TCXO is optional, put this here so it can be changed further down.
 #elif defined(LR11X0_DIO3_TCXO_VOLTAGE)
 float tcxoVoltage = LR11X0_DIO3_TCXO_VOLTAGE; // if TCXO is optional, put this here so it can be changed further down.

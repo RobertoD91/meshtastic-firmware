@@ -156,7 +156,6 @@ float tcxoVoltage = LR2021_DIO3_TCXO_VOLTAGE; // if TCXO is optional, put this h
 #else
 float tcxoVoltage = 1.6f; // default optional TCXO Vref used by LR11x0/LR20x0 init fallback path.
 #endif
-#endif
 
 #ifdef MESHTASTIC_INCLUDE_NICHE_GRAPHICS
 void setupNicheGraphics();

@@ -975,8 +975,10 @@ void setup()
 #ifdef RF95_FAN_EN
     // Ability to disable FAN if PIN has been set with RF95_FAN_EN.
     // Make sure LoRa has been started before disabling FAN.
+#ifndef RF95_FAN_ALWAYS_ON
     if (config.lora.pa_fan_disabled)
         digitalWrite(RF95_FAN_EN, LOW ^ 0);
+#endif
 #endif
 
 #ifndef ARCH_PORTDUINO

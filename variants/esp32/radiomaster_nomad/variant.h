@@ -7,9 +7,10 @@
  *
  * Safe first-port assumptions:
  * - only the primary LR1121 is used by Meshtastic
- * - the secondary LR1121 is left untouched
- * - external PA/APC control on GPIO26 is left untouched
- * - guessed RF switch tables are disabled until measured/verified
+ * - the secondary LR1121 is held in reset and deselected from the shared SPI bus
+ * - the external PA is kept off (APC bias line driven low)
+ * - LR1121 transmit power is clamped low so it cannot overdrive the PA
+ * - guessed RF switch tables stay disabled until measured/verified
  */
 
 #define HAS_GPS 0
@@ -26,7 +27,7 @@
 /*
   Primary LR1121 radio pin connections.
 
-  ExpressLRS Nomad target:
+  ExpressLRS Nomad target (radio 1):
     radio_nss  = 27
     radio_busy = 36
     radio_dio1 = 37
@@ -42,10 +43,36 @@
 #define LR1121_NRESET_PIN 15
 
 /*
-  The ExpressLRS target does not explicitly document a TCXO voltage.
-  Keep TCXO optional for the first smoke tests instead of forcing DIO3 to 1.8 V.
+  Secondary LR1121 radio. Meshtastic only ever drives the primary radio.
+  earlyInitVariant() (variant.cpp) keeps this chip held in reset and
+  deselected from the shared SPI bus so it stays completely silent.
+
+  ExpressLRS Nomad target (radio 2):
+    radio_nss_2  = 13
+    radio_busy_2 = 39
+    radio_dio1_2 = 34
+    radio_rst_2  = 21
+*/
+#define LR1121_2_NSS_PIN 13
+#define LR1121_2_NRESET_PIN 21
+#define LR1121_2_BUSY_PIN 39
+#define LR1121_2_IRQ_PIN 34
+
+/*
+  The ExpressLRS target does not document a TCXO voltage. Keep TCXO optional:
+  RadioLib tries 1.6 V on DIO3 first and transparently falls back to XTAL mode.
 */
 #define TCXO_OPTIONAL
+
+/*
+  Safe bring-up power clamp. The LR1121 feeds an external PA, so its own
+  transmit power is clamped to a low level until the RF chain is validated.
+  LR1110_MAX_POWER is the firmware's generic LR11x0 sub-GHz clamp;
+  LR1120_MAX_POWER is the 2.4 GHz clamp. Receive is unaffected.
+  Raise these deliberately once the hardware has been verified.
+*/
+#define LR1110_MAX_POWER 0
+#define LR1120_MAX_POWER 0
 
 /*
   Do not enable a guessed LR11x0 RF switch table yet.
@@ -54,15 +81,23 @@
 // #define LR11X0_DIO_AS_RF_SWITCH
 
 /*
-  GPIO26 is ExpressLRS power_apc2. It is likely an analog PA/APC control,
-  not a digital PA enable. Do not use it as PA_ENABLE/TXEN/RXEN and do not
-  digitalWrite/dacWrite it in this safe first-port variant.
+  GPIO26 is ExpressLRS power_apc2: the analog gain/bias control for the
+  on-board RF power amplifier. earlyInitVariant() drives it LOW so the
+  external PA stays off during bring-up. Do not raise it until the RF
+  path has been verified.
 */
+#define NOMAD_PA_APC_PIN 26
 
 /*
-  This module has a built-in fan controlled by GPIO2.
+  Built-in fan, controlled by GPIO2.
+  The fan also cools the PA, so it must always run:
+  - earlyInitVariant() starts it at the very beginning of boot, before
+    radio detection, so it spins even if the LR1121 is never found.
+  - RF95_FAN_ALWAYS_ON keeps it on unconditionally (ignores the
+    pa_fan_disabled config option).
 */
 #define RF95_FAN_EN 2
+#define RF95_FAN_ALWAYS_ON
 
 /*
   NeoPixel RGB LED (2 LEDs, GRB order).

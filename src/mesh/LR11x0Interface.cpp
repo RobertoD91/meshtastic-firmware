@@ -59,6 +59,18 @@ template <typename T> bool LR11x0Interface<T>::init()
     digitalWrite(RF95_FAN_EN, HIGH);
 #endif
 
+#ifdef LR1121_2_NRESET_PIN
+    // Dual-LR1121 modules (e.g. RadioMaster Nomad) share one SPI bus between
+    // both radios. Meshtastic only drives the primary radio, so park the
+    // secondary one before any bus traffic: hold it in reset and deselect it
+    // so it cannot drive the shared MISO line and corrupt our transfers.
+    pinMode(LR1121_2_NSS_PIN, OUTPUT);
+    digitalWrite(LR1121_2_NSS_PIN, HIGH);
+    pinMode(LR1121_2_NRESET_PIN, OUTPUT);
+    digitalWrite(LR1121_2_NRESET_PIN, LOW);
+    LOG_INFO("LR11x0: parked secondary radio (NSS pin %d high, NRESET pin %d low)", LR1121_2_NSS_PIN, LR1121_2_NRESET_PIN);
+#endif
+
 #if ARCH_PORTDUINO
     float tcxoVoltage = (float)portduino_config.dio3_tcxo_voltage / 1000;
 // FIXME: correct logic to default to not using TCXO if no voltage is specified for LR11x0_DIO3_TCXO_VOLTAGE

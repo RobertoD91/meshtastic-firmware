@@ -372,8 +372,8 @@ void InputBroker::Init()
             rotaryEncoderInterruptImpl1 = nullptr;
         }
 #endif
-        cardKbI2cImpl = new CardKbI2cImpl();
-        cardKbI2cImpl->init();
+        //cardKbI2cImpl = new CardKbI2cImpl();
+        //cardKbI2cImpl->init();
 #if defined(M5STACK_UNITC6L)
         i2cButton = new i2cButtonThread("i2cButtonThread");
 #endif

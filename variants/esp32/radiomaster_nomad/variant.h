@@ -10,7 +10,7 @@
  * - the secondary LR1121 is held in reset and deselected from the shared SPI bus
  * - the external PA is kept off (APC bias line driven low)
  * - LR1121 transmit power is clamped low so it cannot overdrive the PA
- * - the RF switch table mirrors the ExpressLRS default LR1121 configuration
+ * - guessed RF switch tables stay disabled until measured/verified
  */
 
 #define HAS_GPS 0
@@ -75,11 +75,10 @@
 #define LR1120_MAX_POWER 0
 
 /*
-  RF switch: the Nomad has no custom RF-switch entry in its ExpressLRS target,
-  so it uses the ExpressLRS default LR1121 configuration (DIO5..DIO8 drive the
-  antenna switch). See rfswitch.h for the per-mode truth table.
+  Do not enable a guessed LR11x0 RF switch table yet.
+  The ExpressLRS target does not expose the DIO5/DIO6 RF switch truth table.
 */
-#define LR11X0_DIO_AS_RF_SWITCH
+// #define LR11X0_DIO_AS_RF_SWITCH
 
 /*
   GPIO26 is ExpressLRS power_apc2: the analog gain/bias control for the

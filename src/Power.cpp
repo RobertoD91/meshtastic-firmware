@@ -122,7 +122,7 @@ static const adc_atten_t atten = ADC_ATTENUATION;
 #endif
 #endif
 
-#if HAS_TELEMETRY && !MESHTASTIC_EXCLUDE_ENVIRONMENTAL_SENSOR && !MESHTASTIC_EXCLUDE_I2C
+#if HAS_TELEMETRY && !MESHTASTIC_EXCLUDE_ENVIRONMENTAL_SENSOR
 #if __has_include(<Adafruit_INA219.h>)
 INA219Sensor ina219Sensor;
 #else
@@ -154,7 +154,11 @@ NullSensor ina3221Sensor;
 #include <utility>
 extern std::pair<uint8_t, TwoWire *> nodeTelemetrySensorsMap[_meshtastic_TelemetrySensorType_MAX + 1];
 #if HAS_TELEMETRY && (!MESHTASTIC_EXCLUDE_ENVIRONMENTAL_SENSOR || !MESHTASTIC_EXCLUDE_POWER_TELEMETRY)
+#if __has_include(<Adafruit_MAX1704X.h>)
+MAX17048Sensor max17048Sensor;
+#else
 NullSensor max17048Sensor;
+#endif
 #endif
 #endif
 

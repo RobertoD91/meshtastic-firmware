@@ -239,6 +239,9 @@ template <typename T> void LR11x0Interface<T>::disableInterrupt()
 
 template <typename T> void LR11x0Interface<T>::setStandby()
 {
+#ifdef NOMAD_PA_APC_PIN
+    dacWrite(NOMAD_PA_APC_PIN, 0);
+#endif
     checkNotification(); // handle any pending interrupts before we force standby
 
     int err = lora.standby();
@@ -271,6 +274,9 @@ template <typename T> void LR11x0Interface<T>::addReceiveMetadata(meshtastic_Mes
  */
 template <typename T> void LR11x0Interface<T>::configHardwareForSend()
 {
+#ifdef NOMAD_PA_APC_PIN
+    dacWrite(NOMAD_PA_APC_PIN, 120);
+#endif
     RadioLibInterface::configHardwareForSend();
 }
 
@@ -279,6 +285,9 @@ template <typename T> void LR11x0Interface<T>::configHardwareForSend()
 
 template <typename T> void LR11x0Interface<T>::startReceive()
 {
+#ifdef NOMAD_PA_APC_PIN
+    dacWrite(NOMAD_PA_APC_PIN, 0);
+#endif
 #ifdef SLEEP_ONLY
     sleep();
 #else

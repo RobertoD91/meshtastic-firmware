@@ -71,8 +71,8 @@
   LR1120_MAX_POWER is the 2.4 GHz clamp. Receive is unaffected.
   Raise these deliberately once the hardware has been verified.
 */
-#define LR1110_MAX_POWER 0
-#define LR1120_MAX_POWER 0
+#define LR1110_MAX_POWER 5
+#define LR1120_MAX_POWER 5
 
 /*
   RF switch: the Nomad has no custom RF-switch entry in its ExpressLRS target,

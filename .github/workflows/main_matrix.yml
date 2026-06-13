@@ -52,6 +52,7 @@ jobs:
           - { board: "betafpv_2400_tx_micro",  platform: "esp32"   }
           - { board: "betafpv_superp_2400",   platform: "esp32"   }
           - { board: "radiomaster_nomad",      platform: "esp32"   }
+          - { board: "radiomaster_dbr4",       platform: "esp32"   }
     uses: ./.github/workflows/build_firmware.yml
     with:
       version: ${{ needs.version.outputs.long }}

@@ -329,6 +329,8 @@ typedef enum _meshtastic_HardwareModel {
     meshtastic_HardwareModel_RADIOMASTER_NOMAD = 137,
     /* BetaFPV SuperP 2.4GHz 14ch receiver, ESP32 Pico D4 + SX1280 + AT2401C PA */
     meshtastic_HardwareModel_BETAFPV_SUPERP_2400_RX = 138,
+    /* RadioMaster DBR4 ExpressLRS receiver with ESP32 and dual LR1121 radios */
+    meshtastic_HardwareModel_RADIOMASTER_DBR4 = 139,
     /* ------------------------------------------------------------------------------------------------------------------------------------------
  Reserved ID For developing private Ports. These will show up in live traffic sparsely, so we can use a high number. Keep it within 8 bits.
  ------------------------------------------------------------------------------------------------------------------------------------------ */

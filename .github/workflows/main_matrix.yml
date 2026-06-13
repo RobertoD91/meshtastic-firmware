@@ -130,12 +130,6 @@ jobs:
         arch:
           - esp32
           - esp32s3
-          - esp32c3
-          - esp32c6
-          - nrf52840
-          - rp2040
-          - rp2350
-          - stm32
     runs-on: ubuntu-latest
     needs: [version, build]
     steps:
@@ -246,7 +240,6 @@ jobs:
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     needs:
-      - setup
       - version
       - gather-artifacts
       - build-debian-src
@@ -313,9 +306,15 @@ jobs:
 
       - name: Generate Release manifest
         run: |
-          jq -n --arg ver "${{ needs.version.outputs.long }}" --argjson targets ${{ toJson(needs.setup.outputs.all) }} '{
+          jq -n --arg ver "${{ needs.version.outputs.long }}" '{
             "version": $ver,
-            "targets": $targets
+            "targets": [
+              {"board": "heltec-v4", "platform": "esp32s3"},
+              {"board": "betafpv_2400_tx_micro", "platform": "esp32"},
+              {"board": "betafpv_superp_2400", "platform": "esp32"},
+              {"board": "radiomaster_nomad", "platform": "esp32"},
+              {"board": "radiomaster_dbr4", "platform": "esp32"}
+            ]
           }' > firmware-${{ needs.version.outputs.long }}.json
 
       - name: Save Release manifest artifact
@@ -344,12 +343,6 @@ jobs:
         arch:
           - esp32
           - esp32s3
-          - esp32c3
-          - esp32c6
-          - nrf52840
-          - rp2040
-          - rp2350
-          - stm32
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'meshtastic/firmware'}}
     needs: [release-artifacts, version]
@@ -407,7 +400,7 @@ jobs:
     needs: [release-firmware, version]
     env:
       targets: |-
-        esp32,esp32s3,esp32c3,esp32c6,nrf52840,rp2040,rp2350,stm32
+        esp32,esp32s3
     steps:
       - name: Checkout
         uses: actions/checkout@v6

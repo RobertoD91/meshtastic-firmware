@@ -1,0 +1,25 @@
+name: Verify radiomaster_nomad build
+
+on:
+  push:
+    branches:
+      - ci/verify-nomad-rebase
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install PlatformIO
+        run: pip install -U platformio
+      - name: Build radiomaster_nomad
+        run: pio run -e radiomaster_nomad
+      - name: List artifacts
+        run: ls -la .pio/build/radiomaster_nomad/ | head -20
